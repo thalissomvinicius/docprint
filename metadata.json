@@ -1,0 +1,7 @@
+{
+  "name": "DocPrint",
+  "description": "A mobile-first document scanning, editing, and A4 composition tool designed for high-performance PDF creation.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
