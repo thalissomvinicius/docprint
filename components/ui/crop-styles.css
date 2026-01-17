@@ -1,0 +1,276 @@
+/* CamScanner-style Crop Interface */
+
+/* Main crop container */
+.ReactCrop {
+  position: relative;
+  display: inline-block;
+  cursor: crosshair;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.ReactCrop__image {
+  display: block;
+  max-width: 100%;
+  touch-action: manipulation;
+}
+
+/* Crop selection box */
+.ReactCrop__crop-selection {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate3d(0, 0, 0);
+  box-sizing: border-box;
+  cursor: move;
+  box-shadow: 0 0 0 9999em rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+}
+
+/* Rule of thirds grid lines */
+.ReactCrop__crop-selection::before,
+.ReactCrop__crop-selection::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Vertical grid lines */
+.ReactCrop__crop-selection::before {
+  top: 0;
+  left: 33.33%;
+  width: 1px;
+  height: 100%;
+  box-shadow: 100% 0 0 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Horizontal grid lines */
+.ReactCrop__crop-selection::after {
+  top: 33.33%;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  box-shadow: 0 100% 0 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Corner handles - L-shaped */
+.ReactCrop__drag-handle {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+/* Top-left corner */
+.ReactCrop__drag-handle.ord-nw {
+  top: -3px;
+  left: -3px;
+  cursor: nw-resize;
+}
+
+.ReactCrop__drag-handle.ord-nw::before,
+.ReactCrop__drag-handle.ord-nw::after {
+  content: '';
+  position: absolute;
+  background: white;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+.ReactCrop__drag-handle.ord-nw::before {
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 4px;
+}
+
+.ReactCrop__drag-handle.ord-nw::after {
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 24px;
+}
+
+/* Top-right corner */
+.ReactCrop__drag-handle.ord-ne {
+  top: -3px;
+  right: -3px;
+  cursor: ne-resize;
+}
+
+.ReactCrop__drag-handle.ord-ne::before,
+.ReactCrop__drag-handle.ord-ne::after {
+  content: '';
+  position: absolute;
+  background: white;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+.ReactCrop__drag-handle.ord-ne::before {
+  top: 0;
+  right: 0;
+  width: 24px;
+  height: 4px;
+}
+
+.ReactCrop__drag-handle.ord-ne::after {
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 24px;
+}
+
+/* Bottom-left corner */
+.ReactCrop__drag-handle.ord-sw {
+  bottom: -3px;
+  left: -3px;
+  cursor: sw-resize;
+}
+
+.ReactCrop__drag-handle.ord-sw::before,
+.ReactCrop__drag-handle.ord-sw::after {
+  content: '';
+  position: absolute;
+  background: white;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+.ReactCrop__drag-handle.ord-sw::before {
+  bottom: 0;
+  left: 0;
+  width: 24px;
+  height: 4px;
+}
+
+.ReactCrop__drag-handle.ord-sw::after {
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  height: 24px;
+}
+
+/* Bottom-right corner */
+.ReactCrop__drag-handle.ord-se {
+  bottom: -3px;
+  right: -3px;
+  cursor: se-resize;
+}
+
+.ReactCrop__drag-handle.ord-se::before,
+.ReactCrop__drag-handle.ord-se::after {
+  content: '';
+  position: absolute;
+  background: white;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+.ReactCrop__drag-handle.ord-se::before {
+  bottom: 0;
+  right: 0;
+  width: 24px;
+  height: 4px;
+}
+
+.ReactCrop__drag-handle.ord-se::after {
+  bottom: 0;
+  right: 0;
+  width: 4px;
+  height: 24px;
+}
+
+/* Edge handles (optional - for mid-edge dragging) */
+.ReactCrop__drag-handle.ord-n,
+.ReactCrop__drag-handle.ord-s {
+  width: 100%;
+  height: 10px;
+  cursor: ns-resize;
+}
+
+.ReactCrop__drag-handle.ord-e,
+.ReactCrop__drag-handle.ord-w {
+  width: 10px;
+  height: 100%;
+  cursor: ew-resize;
+}
+
+.ReactCrop__drag-handle.ord-n {
+  top: -5px;
+  left: 0;
+}
+
+.ReactCrop__drag-handle.ord-s {
+  bottom: -5px;
+  left: 0;
+}
+
+.ReactCrop__drag-handle.ord-e {
+  top: 0;
+  right: -5px;
+}
+
+.ReactCrop__drag-handle.ord-w {
+  top: 0;
+  left: -5px;
+}
+
+/* Hover effects for better feedback */
+.ReactCrop__drag-handle:hover::before,
+.ReactCrop__drag-handle:hover::after {
+  background: #4CAF50;
+  transition: background 0.2s ease;
+}
+
+/* Active dragging state */
+.ReactCrop--active .ReactCrop__crop-selection {
+  border-color: #4CAF50;
+}
+
+.ReactCrop--active .ReactCrop__drag-handle::before,
+.ReactCrop--active .ReactCrop__drag-handle::after {
+  background: #4CAF50;
+}
+
+/* Disabled state */
+.ReactCrop--disabled .ReactCrop__drag-handle {
+  cursor: inherit;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .ReactCrop__drag-handle {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .ReactCrop__drag-handle.ord-nw::before,
+  .ReactCrop__drag-handle.ord-ne::before,
+  .ReactCrop__drag-handle.ord-sw::before,
+  .ReactCrop__drag-handle.ord-se::before {
+    width: 30px;
+    height: 5px;
+  }
+  
+  .ReactCrop__drag-handle.ord-nw::after,
+  .ReactCrop__drag-handle.ord-ne::after,
+  .ReactCrop__drag-handle.ord-sw::after,
+  .ReactCrop__drag-handle.ord-se::after {
+    width: 5px;
+    height: 30px;
+  }
+}
+
+/* Animation for crop selection */
+@keyframes cropPulse {
+  0%, 100% {
+    border-color: rgba(255, 255, 255, 0.9);
+  }
+  50% {
+    border-color: rgba(76, 175, 80, 0.9);
+  }
+}
+
+.ReactCrop__crop-selection--new {
+  animation: cropPulse 1s ease-in-out;
+}

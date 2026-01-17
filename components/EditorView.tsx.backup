@@ -1,0 +1,330 @@
+import React, { useState, useEffect, useRef } from 'react';
+import ReactCrop, { Crop, PixelCrop } from 'react-image-crop';
+import { DocImage } from '../types';
+import { Slider } from './ui/Slider';
+import {
+  Check, X, RotateCw, Crop as CropIcon, Sliders, Sun, Contrast,
+  Wand2, Layers, Loader2, Undo2, Redo2, ScanLine
+} from 'lucide-react';
+import { applyFiltersAndRender, applyPerspectiveWarp } from '../utils/imageProcessing';
+import { detectDocumentCorners } from '../utils/edgeDetection';
+import { useToast } from '../contexts/ToastContext';
+
+interface EditorViewProps {
+  file: File;
+  onCancel: () => void;
+  onComplete: (processedImage: DocImage) => void;
+}
+
+type Tab = 'CROP' | 'TUNE';
+
+export const EditorView: React.FC<EditorViewProps> = ({ file, onCancel, onComplete }) => {
+  const [src, setSrc] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('CROP');
+  const toast = useToast();
+
+  // Image Refs
+  const [imgRef, setImgRef] = useState<HTMLImageElement | null>(null);
+  const [containerRef, setContainerRef] = useState<HTMLDivElement | null>(null);
+
+  // Standard Crop State
+  const [crop, setCrop] = useState<Crop>({ unit: '%', width: 80, height: 80, x: 10, y: 10 });
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
+
+  // Edit State
+  const [rotation, setRotation] = useState(0);
+  const [filters, setFilters] = useState({
+    brightness: 0, contrast: 0, grayscale: 0, threshold: 0, autoEnhance: false
+  });
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // History State
+  const [history, setHistory] = useState<Array<{
+    src: string | null;
+    rotation: number;
+    filters: typeof filters;
+    crop: Crop;
+  }>>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  // Initialize history
+  useEffect(() => {
+    if (src && history.length === 0) {
+      const initialState = { src, rotation, filters, crop };
+      setHistory([initialState]);
+      setHistoryIndex(0);
+    }
+  }, [src]);
+
+  const pushToHistory = (newSrc: string | null, newRotation: number, newFilters: typeof filters, newCrop: Crop) => {
+    const currentState = { src: newSrc, rotation: newRotation, filters: newFilters, crop: newCrop };
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(currentState);
+    if (newHistory.length > 20) newHistory.shift(); // Limit history
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const prevState = history[historyIndex - 1];
+      setSrc(prevState.src);
+      setRotation(prevState.rotation);
+      setFilters(prevState.filters);
+      setCrop(prevState.crop);
+      setHistoryIndex(historyIndex - 1);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const nextState = history[historyIndex + 1];
+      setSrc(nextState.src);
+      setRotation(nextState.rotation);
+      setFilters(nextState.filters);
+      setCrop(nextState.crop);
+      setHistoryIndex(historyIndex + 1);
+    }
+  };
+
+  const handleAutoDetect = async () => {
+    if (!src) return;
+    setIsProcessing(true);
+    try {
+      const corners = await detectDocumentCorners(src);
+      if (corners) {
+        const warpedSrc = await applyPerspectiveWarp(src, corners);
+        setSrc(warpedSrc);
+        setCrop({ unit: '%', width: 100, height: 100, x: 0, y: 0 }); // Reset crop
+        pushToHistory(warpedSrc, rotation, filters, { unit: '%', width: 100, height: 100, x: 0, y: 0 });
+        toast.success("Bordas detectadas e corrigidas!");
+      } else {
+        toast.warning("Não foi possível detectar bordas automaticamente.");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro na detecção automática.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  useEffect(() => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => setSrc(reader.result?.toString() || ''));
+    reader.readAsDataURL(file);
+  }, [file]);
+
+  const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    setImgRef(e.currentTarget);
+  };
+
+  const handleRotate = () => {
+    const newRotation = (rotation + 90) % 360;
+    setRotation(newRotation);
+    pushToHistory(src, newRotation, filters, crop);
+  };
+
+  // --- PRESETS ---
+  const applyPreset = (type: 'ORIGINAL' | 'MAGIC' | 'BW' | 'GRAY') => {
+        case 'GRAY': newFilters = { brightness: 0, contrast: 0, grayscale: 100, threshold: 0, autoEnhance: false }; break;
+      }
+setFilters(newFilters);
+pushToHistory(src, rotation, newFilters, crop);
+    };
+
+const handleSave = async () => {
+  if (!imgRef || !src) return;
+  setIsProcessing(true);
+
+  let standardCrop = undefined;
+
+  if (activeTab === 'CROP' && completedCrop) {
+    const scaleX = imgRef.naturalWidth / imgRef.width;
+    const scaleY = imgRef.naturalHeight / imgRef.height;
+
+    standardCrop = {
+      x: completedCrop.x * scaleX,
+      y: completedCrop.y * scaleY,
+      width: completedCrop.width * scaleX,
+      height: completedCrop.height * scaleY
+    };
+  }
+
+  const docImage: DocImage = {
+    id: crypto.randomUUID(),
+    src: src,
+    width: 0,
+    height: 0,
+    rotation: rotation,
+    filters: filters,
+    crop: standardCrop
+  };
+
+  try {
+    const bakedSrc = await applyFiltersAndRender(docImage);
+
+    const tempImg = new Image();
+    tempImg.src = bakedSrc;
+    await new Promise(r => tempImg.onload = r);
+
+    onComplete({
+      ...docImage,
+      src: bakedSrc,
+      width: tempImg.width,
+      height: tempImg.height,
+      rotation: 0,
+      filters: { brightness: 0, contrast: 0, grayscale: 0, threshold: 0, autoEnhance: false },
+      crop: undefined
+    });
+  } catch (e) {
+    console.error(e);
+    toast.error("Erro ao processar imagem. Tente novamente.");
+    setIsProcessing(false);
+  }
+};
+
+if (!src) return (
+  <div className="flex flex-col items-center justify-center h-full text-neutral-500 gap-3">
+    <Loader2 className="w-8 h-8 animate-spin text-brand" />
+    <span>Carregando imagem...</span>
+  </div>
+);
+
+return (
+  <div className="flex flex-col h-full bg-neutral-100">
+    {/* Header */}
+    <div className="h-16 px-4 flex items-center justify-between bg-white border-b border-neutral-200 shrink-0 z-20 shadow-sm">
+      <button
+        onClick={onCancel}
+        disabled={isProcessing}
+        className="w-10 h-10 flex items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        aria-label="Cancelar edição"
+      >
+        <X size={24} />
+      </button>
+      <span className="font-semibold text-lg text-neutral-800">Editar</span>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleUndo}
+          disabled={historyIndex <= 0 || isProcessing}
+          className="w-10 h-10 flex items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 active:scale-95 transition-all disabled:opacity-30"
+          aria-label="Desfazer"
+        >
+          <Undo2 size={20} />
+        </button>
+        <button
+          onClick={handleRedo}
+          disabled={historyIndex >= history.length - 1 || isProcessing}
+          className="w-10 h-10 flex items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 active:scale-95 transition-all disabled:opacity-30"
+          aria-label="Refazer"
+        >
+          <Redo2 size={20} />
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={isProcessing}
+          className="w-10 h-10 flex items-center justify-center rounded-full text-brand hover:bg-brand/10 active:scale-95 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Salvar edição"
+        >
+          {isProcessing ? <Loader2 className="animate-spin" size={24} /> : <Check size={28} />}
+        </button>
+      </div>
+    </div>
+
+    {/* Main Canvas Area */}
+    <div className="flex-1 relative overflow-hidden flex items-center justify-center bg-neutral-900/5 p-4 touch-none">
+
+      {/* Warning if rotation is active during crop */}
+      {activeTab === 'CROP' && rotation !== 0 && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-4 py-2 rounded-full text-sm shadow-lg z-30 whitespace-nowrap">
+          Gire para 0° para recortar
+        </div>
+      )}
+
+      <div className="relative shadow-2xl transition-all duration-300 touch-none" style={{ transform: `rotate(${rotation}deg)`, filter: activeTab === 'TUNE' ? `brightness(${(filters.brightness + 100)}%) contrast(${(filters.contrast + 100)}%) grayscale(${filters.grayscale}%)` : 'none' }}>
+        <div className="relative" ref={setContainerRef}>
+          {/* STANDARD CROP (ReactCrop) */}
+          {activeTab === 'CROP' && rotation === 0 ? (
+            <ReactCrop
+              crop={crop}
+              onChange={c => setCrop(c)}
+              onComplete={c => setCompletedCrop(c)}
+              className="max-h-[70vh]"
+            >
+              <img src={src} onLoad={onImageLoad} className="max-h-[70vh] max-w-full object-contain block" draggable={false} />
+            </ReactCrop>
+          ) : (
+            <img src={src} onLoad={onImageLoad} className="max-h-[70vh] max-w-full object-contain block pointer-events-none select-none" draggable={false} />
+          )}
+
+          {/* Tune Tab Hints */}
+          {activeTab === 'TUNE' && filters.autoEnhance && (
+            <div className="absolute inset-0 pointer-events-none mix-blend-overlay bg-blue-500/10" />
+          )}
+        </div>
+      </div>
+    </div>
+
+    {/* Tools Panel */}
+    <div className="bg-white border-t border-neutral-200 shrink-0 pb-safe z-30">
+      {activeTab === 'TUNE' && (
+        <div className="px-6 py-6 space-y-6 animate-in slide-in-from-bottom-4 fade-in bg-white border-b border-neutral-100">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            <button onClick={() => applyPreset('ORIGINAL')} className="px-4 py-2 rounded-lg bg-neutral-100 text-neutral-600 text-sm font-medium whitespace-nowrap active:scale-95">Original</button>
+            <button onClick={() => applyPreset('MAGIC')} className="px-4 py-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 text-sm font-medium whitespace-nowrap flex items-center gap-2 active:scale-95"><Wand2 size={14} /> Mágica</button>
+            <button onClick={() => applyPreset('BW')} className="px-4 py-2 rounded-lg bg-neutral-800 text-white text-sm font-medium whitespace-nowrap active:scale-95">Preto & Branco</button>
+            <button onClick={() => applyPreset('GRAY')} className="px-4 py-2 rounded-lg bg-neutral-200 text-neutral-700 text-sm font-medium whitespace-nowrap active:scale-95">Tons de Cinza</button>
+          </div>
+          <Slider label="Texto Nítido (Limiar)" icon={<Layers size={16} />} min={0} max={255} value={filters.threshold} onChange={(v) => setFilters(f => ({ ...f, threshold: v }))} />
+          <div className="space-y-4 pt-2">
+            <Slider label="Brilho" icon={<Sun size={16} />} min={-100} max={100} value={filters.brightness} onChange={(v) => setFilters(f => ({ ...f, brightness: v }))} />
+            <Slider label="Contraste" icon={<Contrast size={16} />} min={-100} max={100} value={filters.contrast} onChange={(v) => setFilters(f => ({ ...f, contrast: v }))} />
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-stretch justify-around px-2 py-2 h-20">
+        <button
+          onClick={() => setActiveTab('CROP')}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 rounded-xl transition-all active:scale-95 ${activeTab === 'CROP' ? 'text-brand bg-brand/5' : 'text-neutral-400'}`}
+          aria-label="Recortar imagem"
+          aria-pressed={activeTab === 'CROP'}
+        >
+          <CropIcon size={28} strokeWidth={activeTab === 'CROP' ? 2.5 : 2} />
+          <span className="text-xs font-medium">Recorte</span>
+        </button>
+
+        <button
+          onClick={handleAutoDetect}
+          disabled={isProcessing}
+          className="flex-1 flex flex-col items-center justify-center gap-1 rounded-xl text-neutral-400 active:scale-95 active:bg-neutral-50 transition-all disabled:opacity-50"
+          aria-label="Detectar bordas automaticamente"
+        >
+          <ScanLine size={28} />
+          <span className="text-xs font-medium">Auto</span>
+        </button>
+
+        <button
+          onClick={handleRotate}
+          className="flex-1 flex flex-col items-center justify-center gap-1 rounded-xl text-neutral-400 active:scale-95 active:bg-neutral-50 transition-all"
+          aria-label="Girar imagem 90 graus"
+        >
+          <RotateCw size={28} />
+          <span className="text-xs font-medium">Girar</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('TUNE')}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 rounded-xl transition-all active:scale-95 ${activeTab === 'TUNE' ? 'text-brand bg-brand/5' : 'text-neutral-400'}`}
+          aria-label="Ajustar filtros"
+          aria-pressed={activeTab === 'TUNE'}
+        >
+          <Sliders size={28} strokeWidth={activeTab === 'TUNE' ? 2.5 : 2} />
+          <span className="text-xs font-medium">Ajustes</span>
+        </button>
+      </div>
+    </div>
+  </div>
+);
+  };
